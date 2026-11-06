@@ -1,5 +1,4 @@
 import os
-import logging
 import certifi
 from dotenv import load_dotenv
 
@@ -15,7 +14,6 @@ import json
 import psycopg
 from psycopg.rows import dict_row
 from langgraph.graph import StateGraph, START, END
-from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.checkpoint.postgres import PostgresSaver
 from langgraph.types import Command, interrupt
 from langchain_core.messages import (
@@ -34,8 +32,6 @@ from mcp_client import (
     forecast_mcp_search,
     weather_mcp_search,
 )
-
-logger = logging.getLogger(__name__)
 
 
 def get_database_url():
@@ -724,25 +720,13 @@ graph.add_edge("guardrail_blocked", END)
 # PostgreSQL Checkpointer - original persistence kept
 # =========================
 DATABASE_URL = get_database_url()
-_conn = None
-try:
-    _conn = psycopg.connect(
-        DATABASE_URL,
-        autocommit=True,
-        row_factory=dict_row,
-    )
-    checkpointer = PostgresSaver(_conn)
-    checkpointer.setup()
-except psycopg.OperationalError as exc:
-    if _conn is not None:
-        _conn.close()
-
-    logger.warning(
-        "PostgreSQL is unavailable (%s); using in-memory checkpoints. "
-        "Checkpoints will not survive an application restart.",
-        exc,
-    )
-    checkpointer = InMemorySaver()
+_conn = psycopg.connect(
+    DATABASE_URL,
+    autocommit=True,
+    row_factory=dict_row,
+)
+checkpointer = PostgresSaver(_conn)
+checkpointer.setup()
 
 travel_graph = graph.compile(checkpointer=checkpointer)
 
